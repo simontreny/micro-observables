@@ -1,7 +1,3 @@
-export type BatchedUpdater = (block: () => void) => void;
+export type BatchedUpdateFn = (block: () => void) => void;
 
-export let batchedUpdater: BatchedUpdater | undefined;
-
-export function setBatchedUpdater(updater: BatchedUpdater | undefined) {
-  batchedUpdater = updater;
-}
+export let batchedUpdateFn: BatchedUpdateFn | undefined;

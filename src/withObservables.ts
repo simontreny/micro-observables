@@ -1,8 +1,9 @@
 import hoistNonReactStatics from "hoist-non-react-statics";
 import React from "react";
-import { Unsubscriber } from "./baseObservable";
-import { Observable, ObservableValues } from "./observable";
-import { shallowEqual } from "./shallowEqual";
+import { BaseObservable, Observable, Unsubscriber } from "./observable";
+
+export type ObservableValue<T> = T extends BaseObservable<infer U> ? U : never;
+export type ObservableValues<T> = { [K in keyof T]: ObservableValue<T[K]> };
 
 type Mapping = { [key: string]: Observable<any> };
 type InjectedProps<M extends Mapping> = ObservableValues<M>;
@@ -10,7 +11,7 @@ type HocProps<P extends InjectedProps<M>, M extends Mapping> = Pick<P, Exclude<k
 
 export const withObservables = <P extends InjectedProps<M>, M extends Mapping>(
   Component: React.ComponentType<P>,
-  mapping: (ownProps: HocProps<P, M>) => M
+  mapping: M | ((ownProps: HocProps<P, M>) => M)
 ): React.ComponentType<HocProps<P, M>> => {
   class WithObservables extends React.PureComponent<HocProps<P, M>> {
     private _ownProps!: HocProps<P, M>;
@@ -18,7 +19,7 @@ export const withObservables = <P extends InjectedProps<M>, M extends Mapping>(
     private _unsubscribers: Unsubscriber[] = [];
 
     componentWillUnmount() {
-      this._unsubscribers.forEach(it => it());
+      this._unsubscribers.forEach(unsubscribe => unsubscribe());
       this._unsubscribers = [];
     }
 
@@ -41,10 +42,40 @@ export const withObservables = <P extends InjectedProps<M>, M extends Mapping>(
         const unsubscribers = Object.values(this._mapping).map(observable =>
           observable.subscribe(() => this.forceUpdate())
         );
-        this._unsubscribers.forEach(it => it());
+        this._unsubscribers.forEach(unsubscribe => unsubscribe());
         this._unsubscribers = unsubscribers;
       }
     }
   }
   return hoistNonReactStatics(WithObservables, Component);
 };
+
+// Imported from React's source code
+function shallowEqual(objA: any, objB: any): boolean {
+  if (is(objA, objB)) {
+    return true;
+  }
+
+  if (typeof objA !== "object" || objA === null || typeof objB !== "object" || objB === null) {
+    return false;
+  }
+
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  if (keysA.length !== keysB.length) {
+    return false;
+  }
+
+  for (let i = 0; i < keysA.length; i++) {
+    if (!objB.hasOwnProperty(keysA[i]) || !is(objA[keysA[i]], objB[keysA[i]])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function is(x: any, y: any): boolean {
+  return (x === y && (x !== 0 || 1 / x === 1 / y)) || (x !== x && y !== y);
+}
