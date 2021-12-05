@@ -1,8 +1,8 @@
 import hoistNonReactStatics from "hoist-non-react-statics";
 import React from "react";
-import { BaseObservable, Observable, Unsubscriber } from "../observable";
+import { Observable, Unsubscriber } from "../observable";
 
-export type ObservableValue<T> = T extends BaseObservable<infer U> ? U : never;
+export type ObservableValue<T> = T extends Observable<infer U> ? U : never;
 export type ObservableValues<T> = { [K in keyof T]: ObservableValue<T[K]> };
 
 type Mapping = { [key: string]: Observable<any> };
@@ -40,7 +40,7 @@ export const withObservables = <P extends InjectedProps<M>, M extends Mapping>(
         this._mapping = typeof mapping === "function" ? mapping(this.props) : mapping;
 
         const unsubscribers = Object.values(this._mapping).map((observable) =>
-          observable.subscribe(() => this.forceUpdate())
+          observable.onChange(() => this.forceUpdate())
         );
         this._unsubscribers.forEach((unsubscribe) => unsubscribe());
         this._unsubscribers = unsubscribers;

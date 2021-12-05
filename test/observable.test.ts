@@ -13,16 +13,16 @@ test("Observable.set() should change observable's value", () => {
 
 test("Observable.update() should change observable's value, using current value", () => {
   const books = observable(["The Jungle Book"]);
-  books.update(it => [...it, "Pride and Prejudice"]);
+  books.update((it) => [...it, "Pride and Prejudice"]);
   expect(books.get()).toStrictEqual(["The Jungle Book", "Pride and Prejudice"]);
 });
 
-test("Listeners added with Observable.subscribe() should be called when value changes", () => {
+test("Listeners added with Observable.onChange() should be called when value changes", () => {
   const book = observable("The Jungle Book");
 
   const received: string[] = [];
   const prevReceived: string[] = [];
-  book.subscribe((newBook, prevBook) => {
+  book.onChange((newBook, prevBook) => {
     received.push(newBook);
     prevReceived.push(prevBook);
   });
@@ -34,13 +34,13 @@ test("Listeners added with Observable.subscribe() should be called when value ch
   expect(prevReceived).toStrictEqual(["The Jungle Book"]);
 });
 
-test("Listeners added with Observable.subscribe() should be removed when calling returned function", () => {
+test("Listeners added with Observable.onChange() should be removed when calling returned function", () => {
   const book = observable("The Jungle Book");
 
   const received: string[] = [];
   const addBookToReceived = (newBook: string) => received.push(newBook);
-  const unsubscribe1 = book.subscribe(addBookToReceived);
-  const unsubscribe2 = book.subscribe(addBookToReceived);
+  const unsubscribe1 = book.onChange(addBookToReceived);
+  const unsubscribe2 = book.onChange(addBookToReceived);
   expect(received).toStrictEqual([]);
 
   book.set("Pride and Prejudice");
@@ -64,11 +64,11 @@ test("Listeners can be removed as soon as they are invoked without preventing ot
 
   const received: string[] = [];
   const addBookToReceived = (newBook: string) => received.push(newBook);
-  const unsubscribe1 = book.subscribe(newBook => {
+  const unsubscribe1 = book.onChange((newBook) => {
     addBookToReceived(newBook);
     unsubscribe1();
   });
-  const unsubscribe2 = book.subscribe(addBookToReceived);
+  const unsubscribe2 = book.onChange(addBookToReceived);
   expect(received).toStrictEqual([]);
 
   book.set("Pride and Prejudice");
@@ -88,7 +88,7 @@ test("derived() should create a new observable with the result of the computatio
   expect(author.get()).toBe("Kipling");
 
   const received: string[] = [];
-  author.subscribe(newAuthor => received.push(newAuthor));
+  author.onChange((newAuthor) => received.push(newAuthor));
 
   book.set({ title: "Pride and Prejudice", author: "Austen" });
   expect(author.get()).toBe("Austen");
@@ -106,7 +106,7 @@ test("derived() should automatically tracks inputs and be updated when an input 
   expect(book.get()).toStrictEqual({ author: "Shakespeare", title: "Hamlet" });
 
   const received: { title: string; author: string }[] = [];
-  book.subscribe(b => received.push(b));
+  book.onChange((b) => received.push(b));
   title.set("Romeo and Juliet");
   expect(received).toStrictEqual([{ author: "Shakespeare", title: "Romeo and Juliet" }]);
 
@@ -123,7 +123,7 @@ test("derived() should automatically tracks inputs and be updated when an input 
   expect(bookTitleLength.get()).toStrictEqual(19);
 
   const receivedLength: number[] = [];
-  bookTitleLength.subscribe(l => receivedLength.push(l));
+  bookTitleLength.onChange((l) => receivedLength.push(l));
   title.set("Prejudice and Pride");
   expect(receivedLength).toStrictEqual([]);
 
@@ -140,7 +140,7 @@ test("fromPromise() should create a new observable initialized with undefined an
   expect(book.get()).toStrictEqual("The Jungle Book");
 
   const failedBookPromise = Promise.reject("timeout");
-  const failedBook = fromPromise(failedBookPromise, e => `Failed to fetch book: ${e}`);
+  const failedBook = fromPromise(failedBookPromise, (e) => `Failed to fetch book: ${e}`);
   expect(failedBook.get()).toStrictEqual(undefined);
 
   await expect(failedBookPromise).rejects;
@@ -165,22 +165,22 @@ test("Computed observables should call listeners as few as possible", () => {
   expect(newBooks.get()).toStrictEqual(books.get());
 
   const received: string[][] = [];
-  newBooks.subscribe(b => received.push(b));
+  newBooks.onChange((b) => received.push(b));
   books.set(["The Jungle Book", "Pride and Prejudice"]);
   expect(received).toStrictEqual([["The Jungle Book", "Pride and Prejudice"]]);
 });
 
 test("Observable.batch() calls listeners of modified observables only once", () => {
-  const numbers = Array.from(Array(10).keys()).map(index => observable(index));
+  const numbers = Array.from(Array(10).keys()).map((index) => observable(index));
   const total = derived(() => numbers.reduce((acc, num) => acc + num.get(), 0));
   expect(total.get()).toStrictEqual(45);
 
   let received: number[] = [];
-  total.subscribe(t => received.push(t));
-  numbers.forEach(num => num.update(it => it + 1));
+  total.onChange((t) => received.push(t));
+  numbers.forEach((num) => num.update((it) => it + 1));
   expect(received).toStrictEqual([46, 47, 48, 49, 50, 51, 52, 53, 54, 55]);
 
   received = [];
-  batch(() => numbers.forEach(num => num.update(it => it + 1)));
+  batch(() => numbers.forEach((num) => num.update((it) => it + 1)));
   expect(received).toStrictEqual([65]);
 });

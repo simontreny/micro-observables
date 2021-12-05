@@ -18,15 +18,15 @@ export function fromPromise<T, E = undefined>(
 ): Observable<T | E | undefined> {
   const obs = observable<T | E | undefined>(undefined);
   promise.then(
-    val => obs.set(val),
-    e => onError && obs.set(onError(e))
+    (val) => obs.set(val),
+    (e) => onError && obs.set(onError(e))
   );
   return obs;
 }
 
 export function toPromise<T>(observable: Observable<T>): Promise<T> {
-  return new Promise(resolve => {
-    const unsubscribe = observable.subscribe(val => {
+  return new Promise((resolve) => {
+    const unsubscribe = observable.onChange((val) => {
       resolve(val);
       unsubscribe();
     });

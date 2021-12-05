@@ -13,13 +13,13 @@
   ],
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
-  "module": "dist/micro-observables.esm.js",
   "files": [
     "dist",
     "src",
     "batching*"
   ],
   "scripts": {
+    "watch": "tsup --watch",
     "build": "tsup",
     "test": "jest",
     "prepublishOnly": "npm run build && npm run test"
