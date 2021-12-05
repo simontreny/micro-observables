@@ -1,4 +1,6 @@
-import { batchedUpdateFn } from "./batchedUpdater";
+export type BatchedUpdateFn = (block: () => void) => void;
+
+export let batchedUpdateFn: BatchedUpdateFn | undefined;
 
 let batchedObservables: BaseObservable<any>[] = [];
 let batchDepth = 0;

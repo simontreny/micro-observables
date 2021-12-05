@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from "react";
-import { BaseObservable } from "./observable";
+import { BaseObservable } from "../observable";
 
 export function useObservable<T>(observable: BaseObservable<T>): T {
   const [, forceRender] = useState({});
