@@ -9,5 +9,6 @@ export default defineConfig((options) => ({
     ["index"]: "src/index.ts",
     ["react/index"]: "src/react/index.ts",
     ["redux/index"]: "src/redux/index.ts",
+    ["query/index"]: "src/query/index.ts",
   },
 }));
