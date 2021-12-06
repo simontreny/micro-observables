@@ -3,11 +3,6 @@ import { Observable, Options } from "..";
 
 type Selector<T, TState> = (state: TState) => T;
 
-export interface ReduxOptions<T, TState = any> extends Options<T> {
-  store: Store<TState>;
-  select: Selector<T, TState>;
-}
-
 export class ReduxObservable<T, TState = any> extends Observable<T> {
   private _store: Store<TState>;
   private _select: Selector<T, TState>;
