@@ -11,18 +11,15 @@
     "state",
     "hook"
   ],
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
   "files": [
-    "dist",
-    "src",
-    "batching*"
+    "*"
   ],
   "scripts": {
     "watch": "tsup --watch",
     "build": "tsup",
     "test": "jest",
-    "prepublishOnly": "npm run build && npm run test"
+    "prepublishOnly": "if [[ ! $PWD =~ dist$ ]]; then echo 'Use `npm run dist` instead' && exit 1; fi",
+    "dist": "npm run build && npm run test && cp package.json README.md dist && npm publish dist"
   },
   "repository": {
     "type": "git",
