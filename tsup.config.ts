@@ -8,5 +8,6 @@ export default defineConfig((options) => ({
   entryPoints: {
     ["index"]: "src/index.ts",
     ["react/index"]: "src/react/index.ts",
+    ["redux/index"]: "src/redux/index.ts",
   },
 }));
