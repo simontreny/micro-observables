@@ -199,23 +199,6 @@ export abstract class Observable<T> {
   }
 }
 
-export class DefaultValObservable<T> extends Observable<T> {
-  protected _defaultVal: T;
-
-  constructor(defaultVal: T, options?: Options<T>) {
-    super(options);
-    this._defaultVal = defaultVal;
-  }
-
-  get defaultVal(): T {
-    return this._defaultVal;
-  }
-
-  protected evaluate(): T {
-    return this._defaultVal;
-  }
-}
-
 export class WritableObservable<T> extends Observable<T> {
   private _defaultVal: T;
   private _next: T | typeof UNSET = UNSET;
