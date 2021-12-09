@@ -1,3 +1,5 @@
+import { batchedUpdateFn } from "./batchedUpdate";
+
 export type Listener<T> = (val: T, prevVal: T) => void;
 export type Unsubscriber = () => void;
 export type EqualityFn<T> = (a: T, b: T) => boolean;
@@ -5,7 +7,6 @@ export type Revision = number;
 export type BatchedUpdateFn = (block: () => void) => void;
 
 export const UNSET = Symbol();
-export let batchedUpdateFn: BatchedUpdateFn | undefined;
 
 let batchedObservables: Observable<any>[] = [];
 let batchDepth = 0;
