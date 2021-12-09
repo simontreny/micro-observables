@@ -22,7 +22,7 @@ export abstract class Observable<T> {
   protected _listeners: Listener<T>[] = [];
   protected _inputs: Observable<any>[] = [];
   protected _outputs: Observable<any>[] = [];
-  /*protected */ _revision: Revision = -1;
+  protected _revision: Revision = -1;
   protected _refreshRevision: Revision = -1;
   protected _attached = false;
   protected _inBatch = false;
@@ -39,7 +39,7 @@ export abstract class Observable<T> {
 
   static onGet: ((observable: Observable<any>) => void) | undefined;
 
-  /*protected */ refresh(): boolean {
+  protected refresh(): boolean {
     if (this._refreshRevision === globalRevision) {
       return false;
     }
@@ -253,7 +253,7 @@ export class WritableObservable<T> extends Observable<T> {
 
 export class DerivedObservable<T> extends Observable<T> {
   private _compute: () => T;
-  private _prevInputs = new Map<Observable<any>, Revision>();
+  private _prevInputs = new Map<DerivedObservable<any>, Revision>();
   private _memoized: T | typeof UNSET = UNSET;
 
   constructor(compute: () => T, options?: Options<T>) {
@@ -278,10 +278,15 @@ export class DerivedObservable<T> extends Observable<T> {
       return this._memoized as T;
     }
 
-    const inputs = new Map<Observable<any>, Revision>();
+    // Note: we are lying to Typescript here: inputs should actually be a Map<Observable<any>, Revision>
+    // as inputs can be WritableObservables or any other types of observables. But the "protected" access-modifier
+    // behaves differently in Typescript than in other OOP languagues and we wouldn't be able to access refresh()
+    // or _revision otherwise. An alternative could be to declare refresh() as public and to annotate it with an
+    // "internal" comment-hint but I find it less elegant
+    const inputs = new Map<DerivedObservable<any>, Revision>();
     const prevOnGet = Observable.onGet;
     try {
-      Observable.onGet = (input) => inputs.set(input, input._revision);
+      Observable.onGet = (input: any) => inputs.set(input, input._revision);
       const val = this._compute();
 
       for (const input of inputs.keys()) {
