@@ -40,7 +40,7 @@ export const withObservables = <P extends InjectedProps<M>, M extends Mapping>(
         this._mapping = typeof mapping === "function" ? mapping(this.props) : mapping;
 
         const unsubscribers = Object.values(this._mapping).map((observable) =>
-          observable.onChange(() => this.forceUpdate())
+          observable.subscribe(() => this.forceUpdate())
         );
         this._unsubscribers.forEach((unsubscribe) => unsubscribe());
         this._unsubscribers = unsubscribers;

@@ -6,7 +6,7 @@ export function useObservable<T>(observable: Observable<T>): T {
   const val = observable.get();
 
   useLayoutEffect(() => {
-    return observable.onChange(() => forceRender({}));
+    return observable.subscribe(() => forceRender({}));
   }, [observable]);
 
   return val;

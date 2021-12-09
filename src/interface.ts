@@ -26,7 +26,7 @@ export function fromPromise<T, E = undefined>(
 
 export function toPromise<T>(observable: Observable<T>): Promise<T> {
   return new Promise((resolve) => {
-    const unsubscribe = observable.onChange((val) => {
+    const unsubscribe = observable.subscribe((val) => {
       resolve(val);
       unsubscribe();
     });

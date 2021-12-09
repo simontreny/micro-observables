@@ -66,7 +66,7 @@ export abstract class Observable<T> {
 
   protected abstract evaluate(): T;
 
-  onChange(listener: Listener<T>): Unsubscriber {
+  subscribe(listener: Listener<T>): Unsubscriber {
     this._listeners.push(listener);
     this.attachInputs();
 
