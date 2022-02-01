@@ -23,7 +23,6 @@ export type Migration = (operations: MigrationOperations) => Promise<void>;
 export interface PersistOptions {
   storage: Storage;
   migrations?: Migration[];
-  // throttle?: number;
   readOnly?: boolean;
   onInfo?: (message: string) => void;
   onError?: (message: string, error: any) => void;
@@ -35,20 +34,20 @@ export class Persistor {
 
   constructor(options: PersistOptions) {
     this._options = options;
-    this.runMigrations();
+    this.applyMigrations();
   }
 
   persist = async (mapping: Record<string, any>, keyPrefix: string): Promise<void> => {
     for (const key of Object.keys(mapping)) {
       const value = mapping[key];
       if (value instanceof WritableObservable) {
-        await this.persistSingle(value, key);
+        await this.persistSingle(value, `${keyPrefix}.${key}`);
       }
     }
   };
 
   persistSingle = async (observable: WritableObservable<any>, key: string): Promise<void> => {
-    const value = await this.get(key);
+    const value = await this.runAsync(() => this.get(key));
     if (value !== UNSET) {
       observable.set(value);
     }
@@ -59,24 +58,33 @@ export class Persistor {
     await Promise.all(this._pendingPromises);
   };
 
-  private async runMigrations(): Promise<void> {
-    const { migrations = [] } = this._options;
-    const version = (await this.get(versionKey)) ?? 0;
+  private runAsync<T>(block: () => Promise<T>): Promise<T> {
+    const promise = block();
+    this._pendingPromises.push(promise);
+    promise.finally(() => this._pendingPromises.splice(this._pendingPromises.indexOf(promise), 1));
+    return promise;
+  }
 
-    if (migrations.length < version) {
-      this.onError("Downgrading is not supported", undefined);
-      return;
-    }
+  private applyMigrations(): Promise<void> {
+    return this.runAsync(async () => {
+      const { migrations = [] } = this._options;
+      const version = (await this.get(versionKey)) ?? 0;
 
-    const { get, set, remove } = this;
-    const operations = { get, set, remove };
-    for (let i = version; i < migrations.length; i++) {
-      const newVersion = version + 1;
-      this.onInfo(`Migrating to version ${newVersion}`);
-      await migrations[i](operations);
-      await this.set(versionKey, newVersion);
-      this.onInfo(`Successfully migrated to version ${newVersion}`);
-    }
+      if (migrations.length < version) {
+        this.onError("Downgrading is not supported", undefined);
+        return;
+      }
+
+      const { get, set, remove } = this;
+      const operations = { get, set, remove };
+      for (let i = version; i < migrations.length; i++) {
+        const newVersion = version + 1;
+        this.onInfo(`Migrating to version ${newVersion}`);
+        await migrations[i](operations);
+        await this.set(versionKey, newVersion);
+        this.onInfo(`Successfully migrated to version ${newVersion}`);
+      }
+    });
   }
 
   private get = async <T = any>(key: string): Promise<T | typeof UNSET> => {
