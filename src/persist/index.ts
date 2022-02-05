@@ -1,10 +1,9 @@
 import { WritableObservable } from "../observable";
 
-const versionKey = "mo-persist.version";
+const VERSION_KEY = "mo-persist.version";
+const UNSET = Symbol();
 
 type Nullable<T> = T | null | undefined;
-
-export const UNSET = Symbol();
 
 export interface Storage {
   getItem(key: string): Promise<Nullable<string>> | Nullable<string>;
@@ -13,9 +12,10 @@ export interface Storage {
 }
 
 export interface MigrationOperations {
-  get: <T = any>(key: string) => Promise<T | typeof UNSET>;
-  set: <T = any>(key: string, value: T) => Promise<void>;
-  remove: (key: string) => void;
+  get<T = any>(key: string): Promise<T | undefined>;
+  get<T = any>(key: string, defaultVal: T): Promise<T>;
+  set<T = any>(key: string, value: T): Promise<void>;
+  remove(key: string): Promise<void>;
 }
 
 export type Migration = (operations: MigrationOperations) => Promise<void>;
@@ -28,116 +28,142 @@ export interface PersistOptions {
   onError?: (message: string, error: any) => void;
 }
 
-export class Persistor {
-  private _options: PersistOptions;
-  private _pendingPromises: Promise<any>[] = [];
+export interface Persistor {
+  persist(mapping: Record<string, any>, keyPrefix?: string): Promise<void>;
+  persistSingle(observable: WritableObservable<any>, key: string): Promise<void>;
+  waitForReady(): Promise<void>;
+  flush(): Promise<void>;
+}
 
-  constructor(options: PersistOptions) {
-    this._options = options;
-    this.applyMigrations();
-  }
+export function createPersist(options: PersistOptions): Persistor {
+  let migratePromise: Promise<void> | undefined;
+  const loadPromises: Promise<any>[] = [];
+  const savePromises: Promise<any>[] = [];
 
-  persist = async (mapping: Record<string, any>, keyPrefix: string): Promise<void> => {
+  async function persist(mapping: Record<string, any>, keyPrefix?: string): Promise<void> {
+    const promises: Promise<void>[] = [];
     for (const key of Object.keys(mapping)) {
       const value = mapping[key];
       if (value instanceof WritableObservable) {
-        await this.persistSingle(value, `${keyPrefix}.${key}`);
+        promises.push(persistSingle(value, keyPrefix ? `${keyPrefix}.${key}` : key));
       }
     }
-  };
-
-  persistSingle = async (observable: WritableObservable<any>, key: string): Promise<void> => {
-    const value = await this.runAsync(() => this.get(key));
-    if (value !== UNSET) {
-      observable.set(value);
-    }
-    observable.subscribe(newValue => this.set(key, newValue));
-  };
-
-  waitForLoaded = async (): Promise<void> => {
-    await Promise.all(this._pendingPromises);
-  };
-
-  private runAsync<T>(block: () => Promise<T>): Promise<T> {
-    const promise = block();
-    this._pendingPromises.push(promise);
-    promise.finally(() => this._pendingPromises.splice(this._pendingPromises.indexOf(promise), 1));
-    return promise;
+    await Promise.all(promises);
   }
 
-  private applyMigrations(): Promise<void> {
-    return this.runAsync(async () => {
-      const { migrations = [] } = this._options;
-      const version = (await this.get(versionKey)) ?? 0;
-
-      if (migrations.length < version) {
-        this.onError("Downgrading is not supported", undefined);
-        return;
+  async function persistSingle(observable: WritableObservable<any>, key: string): Promise<void> {
+    await runLoadAsync(async () => {
+      const value = await get(key, UNSET);
+      if (value !== UNSET) {
+        observable.set(value);
       }
-
-      const { get, set, remove } = this;
-      const operations = { get, set, remove };
-      for (let i = version; i < migrations.length; i++) {
-        const newVersion = version + 1;
-        this.onInfo(`Migrating to version ${newVersion}`);
-        await migrations[i](operations);
-        await this.set(versionKey, newVersion);
-        this.onInfo(`Successfully migrated to version ${newVersion}`);
-      }
+      observable.subscribe((newValue) => runSaveAsync(() => set(key, newValue)));
     });
   }
 
-  private get = async <T = any>(key: string): Promise<T | typeof UNSET> => {
-    const { storage } = this._options;
+  async function waitForReady(): Promise<void> {
+    await Promise.all(migratePromise ? [migratePromise, ...loadPromises] : loadPromises);
+  }
+
+  async function flush(): Promise<void> {
+    await Promise.all(savePromises);
+  }
+
+  async function runLoadAsync<T>(block: () => Promise<T>): Promise<T> {
+    if (migratePromise) {
+      await migratePromise;
+    }
+    const promise = block();
+    loadPromises.push(promise);
+    promise.finally(() => loadPromises.splice(loadPromises.indexOf(promise), 1));
+    return promise;
+  }
+
+  function runSaveAsync<T>(block: () => Promise<T>): Promise<T> {
+    const promise = block();
+    savePromises.push(promise);
+    promise.finally(() => savePromises.splice(savePromises.indexOf(promise), 1));
+    return promise;
+  }
+
+  function migrate(): Promise<void> {
+    migratePromise = (async () => {
+      const { migrations = [] } = options;
+      const version = (await get<number>(VERSION_KEY)) ?? 0;
+
+      if (migrations.length < version) {
+        onError("Downgrading is not supported", undefined);
+        return;
+      }
+
+      const operations = { get, set, remove };
+      for (let i = version; i < migrations.length; i++) {
+        const newVersion = i + 1;
+        onInfo(`Migrating to version ${newVersion}`);
+        await migrations[i](operations);
+        await set<number>(VERSION_KEY, newVersion);
+        onInfo(`Successfully migrated to version ${newVersion}`);
+      }
+    })();
+    migratePromise.finally(() => {
+      migratePromise = undefined;
+    });
+    return migratePromise;
+  }
+
+  function get<T = any>(key: string): Promise<T | undefined>;
+  function get<T = any>(key: string, defaultVal: T): Promise<T>;
+  async function get(key: string, defaultVal?: any): Promise<any> {
+    const { storage } = options;
     try {
       const serialized = await storage.getItem(key);
-      return serialized ? JSON.parse(serialized) : UNSET;
+      return serialized ? JSON.parse(serialized) : defaultVal;
     } catch (e) {
-      this.onError(`Failed to read value for key ${key}`, e);
-      return UNSET;
+      onError(`Unable to read value for key ${key}`, e);
+      return defaultVal;
     }
-  };
+  }
 
-  private set = async <T = any>(key: string, value: T): Promise<void> => {
-    const { storage, readOnly } = this._options;
+  async function set<T = any>(key: string, value: T): Promise<void> {
+    const { storage, readOnly } = options;
     try {
       const serialized = JSON.stringify(value);
       if (!readOnly) {
         await storage.setItem(key, serialized);
       }
     } catch (e) {
-      this.onError(`Failed to write value for key ${key}`, e);
+      onError(`Unable to write value for key ${key}`, e);
     }
-  };
+  }
 
-  private remove = async (key: string): Promise<void> => {
-    const { storage, readOnly } = this._options;
+  async function remove(key: string): Promise<void> {
+    const { storage, readOnly } = options;
     try {
       if (!readOnly) {
         await storage.removeItem(key);
       }
     } catch (e) {
-      this.onError(`Failed to remove value for key ${key}`, e);
+      onError(`Unable to remove value for key ${key}`, e);
     }
-  };
+  }
 
-  private onInfo(message: string) {
-    if (this._options.onInfo) {
-      this._options.onInfo(message)
+  function onInfo(message: string) {
+    if (options.onInfo) {
+      options.onInfo(message);
     } else if (process.env.NODE_ENV !== "production") {
       console.log("[micro-observables-persist] " + message);
     }
   }
 
-  private onError(message: string, error: any) {
-    if (this._options.onError) {
-      this._options.onError(message, error)
+  function onError(message: string, error: any) {
+    if (options.onError) {
+      options.onError(message, error);
     } else if (process.env.NODE_ENV !== "production") {
       console.error("[micro-observables-persist] " + message, error);
     }
   }
-}
 
-export function createPersist(options: PersistOptions): Persistor {
-  return new Persistor(options);
+  migrate();
+
+  return { persist, persistSingle, waitForReady, flush };
 }
