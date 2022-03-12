@@ -1,6 +1,6 @@
 {
   "name": "micro-observables",
-  "version": "2.0.0-alpha4",
+  "version": "2.0.0-alpha5",
   "description": "A simple Observable library that can be used for easy state management in React applications.",
   "author": "BeTomorrow",
   "license": "MIT",
@@ -31,7 +31,7 @@
     "arrowParens": "always"
   },
   "peerDependencies": {
-    "react": "^16.8.0"
+    "react": ">=16.8.0"
   },
   "peerDependenciesMeta": {
     "react": {
