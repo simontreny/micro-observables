@@ -1,6 +1,6 @@
 {
   "name": "micro-observables",
-  "version": "2.0.0-alpha5",
+  "version": "2.0.0-alpha7",
   "description": "A simple Observable library that can be used for easy state management in React applications.",
   "author": "BeTomorrow",
   "license": "MIT",
