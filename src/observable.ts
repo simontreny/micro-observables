@@ -4,7 +4,6 @@ export type Listener<T> = (val: T, prevVal: T) => void;
 export type Unsubscriber = () => void;
 export type EqualityFn<T> = (a: T, b: T) => boolean;
 export type Revision = number;
-export type BatchedUpdateFn = (block: () => void) => void;
 
 export const UNSET = Symbol();
 
@@ -166,35 +165,38 @@ export abstract class Observable<T> {
   }
 
   static batch(block: () => void) {
-    try {
-      batchDepth++;
-      if (batchDepth === 1 && batchedUpdateFn) {
-        batchedUpdateFn(block);
-      } else {
+    const batchedBlock = () => {
+      try {
+        batchDepth++;
         block();
-      }
-    } finally {
-      batchDepth--;
-      if (batchDepth === 0) {
-        const observables = batchedObservables;
-        batchedObservables = [];
+      } finally {
+        batchDepth--;
+        if (batchDepth === 0) {
+          const observables = batchedObservables;
+          batchedObservables = [];
 
-        // Refresh dirty observables and calls listeners when they have changed.
-        // We iterate in reverse order as addToBatch() adds them in reverse topological order
-        for (let i = observables.length - 1; i >= 0; i--) {
-          const observable = observables[i];
-          const prevVal = observable._val;
-          const hasChanged = observable.refresh();
-          const val = observable._val;
-          observable._inBatch = false;
+          // Refresh dirty observables and calls listeners when they have changed.
+          // We iterate in reverse order as addToBatch() adds them in reverse topological order
+          for (let i = observables.length - 1; i >= 0; i--) {
+            const observable = observables[i];
+            const prevVal = observable._val;
+            const hasChanged = observable.refresh();
+            const val = observable._val;
+            observable._inBatch = false;
 
-          if (hasChanged) {
-            for (const listener of observable._listeners.slice()) {
-              listener(val, prevVal);
+            if (hasChanged) {
+              for (const listener of observable._listeners.slice()) {
+                listener(val, prevVal);
+              }
             }
           }
         }
       }
+    };
+    if (batchDepth === 0 && batchedUpdateFn) {
+      batchedUpdateFn(batchedBlock);
+    } else {
+      batchedBlock();
     }
   }
 }
