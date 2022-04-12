@@ -68,7 +68,7 @@ export const TodoList = () => {
           <TodoItem key={todo.id} todo={todo} />
         ))}
       </ul>
-      <AddTodoForm />
+      <AddTodoButton />
       <RemoveAllTodosButton />
     </div>
   );
@@ -90,21 +90,14 @@ const TodoItem = ({ todo }: { todo: Todo }) => {
   );
 };
 
-const AddTodoForm = () => {
-  const input = useRef<HTMLInputElement>(null);
-
-  const addTodo = (event: React.FormEvent) => {
-    event.preventDefault();
-    todoService.addTodo(input.current!.value);
-    input.current!.value = "";
+const AddTodoButton = () => {
+  const addTodo = () => {
+    const title = prompt("Title");
+    if (title) {
+      todoService.addTodo(title);
+    }
   };
-
-  return (
-    <form onSubmit={addTodo}>
-      <input ref={input} />
-      <button>Add</button>
-    </form>
-  );
+  return <button onClick={addTodo}>Add Todo</button>;
 };
 
 const RemoveAllTodosButton = () => {
