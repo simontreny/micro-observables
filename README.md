@@ -1,71 +1,56 @@
 # Micro-observables
 
-_A simple Observable library that can be used for easy state-management in React applications._
+_An easy-to-use state management library for React applications, based on observables._
 
 ## Features
 
-- **💆‍♂️ Easy to learn:** No boilerplate required, write code as you would naturally. Just wrap values that you want to expose to your UI into observables. Micro-observables only exposes a few methods to create and transform observables
-- **⚛️ React support:** Out-of-the-box React support based on React Hooks and higher-order components
-- **🐥 Lightweight:** The whole source code is made of less than 400 lines of code, resulting in a **6kb** production bundle
-- **🔥 Performant:** Observables are evaluated only when needed. Micro-observables also supports [React and React Native batching](#react-batching), minimizing the amount of re-renders
-- **🔮 Debuggable:** Micro-observables does not rely on ES6 proxies, making it easy to identify lines of code that trigger renders. Code execution is easy to follow, making debugging straightforward
+- **💆‍♂️ Easy to learn:** No boilerplate required, write code as you would naturally. Just wrap your state values into observables. Micro-observables only exposes a couple of functions to create and derive observables
+- **🔥 Performant:** Derived observables are memoized by default and evaluated only when needed. Micro-observables also supports [React and React Native batching](#react-batching), minimizing the amount of re-renders
+- **🔮 No implicitness:** Micro-observables does not rely on ES6 proxies or properties, making it easy to identify lines of code that trigger renders. Code execution is easy to follow, making debugging straightforward
+- **⚛️ React support:** Out-of-the-box React support based on Hooks or higher-order components. The core of the library can also be used without React in any vanilla JS applications.
 - **🛠 TypeScript support:** Being written entirely in TypeScript, types are first-class citizen
+- **🤝 Integrations:** Micro-observables comes with optional support for popular libraries such as **Redux** or **React Query**
 
 ## Introduction
 
-In micro-observables, observables are objects that store a single value. They are used to store a **piece of state** of your app. An observable notifies listeners each time its value changes, triggering a re-render of all components that are using that observable for example.
+In Micro-observables, observables are objects that holds a value, representing **a piece of state** of your app. Listeners can **subscribe** to observables to get notified the its changes. Observables can also be easily **derived** into new observables in order to build complex applications.
 
-Observables can be easily derived into new observables by applying functions on them, such as `select()`, `onlyIf()` or `default()`.
+Micro-observables works great in combination with React with the `useObservable()` hook or the `withObservables()` higher-order component. It allows to keep components in sync with the app's state and can be used as a simple yet powerful alternative to [Redux](https://redux.js.org) or [MobX](https://mobx.js.org).
 
-Micro-observables works great in combination with React thanks to the use of the `useObservable()` hook or the `withObservables` higher-order component. It can be used as a simple yet powerful alternative to [Redux](https://redux.js.org) or [MobX](https://mobx.js.org).
-
-Micro-observables has been inspired by the simplicity of [micro-signals](https://github.com/lelandmiller/micro-signals). We recommend checking out this library for event-driven programming.
-
-**Note:** If you are used to RxJS, you can think of micro-observables as a React-friendly subset of RxJS exposing only the `BehaviorSubject` class.
-
-## Basic usage
-
-```ts
-import assert from "assert";
-import { observable } from "micro-observables";
-
-const favoriteBook = observable({ title: "The Jungle Book", author: "Kipling" });
-const favoriteAuthor = favoriteBook.select(book => book.author);
-
-assert.deepEqual(favoriteBook.get(), { title: "The Jungle Book", author: "Kipling" });
-assert.equal(favoriteAuthor.get(), "Kipling");
-
-const receivedAuthors: string[] = [];
-favoriteAuthor.subscribe(author => receivedAuthors.push(author));
-
-favoriteBook.set({ title: "Pride and Prejudice", author: "Austen" });
-assert.deepEqual(receivedAuthors, ["Austen"]);
-
-favoriteBook.set({ title: "Hamlet", author: "Shakespeare" });
-assert.deepEqual(receivedAuthors, ["Austen", "Shakespeare"]);
-```
-
-## Using micro-observables with React
-
-Micro-observables works great with React and can be used to replace state-management libraries such as Redux or MobX. It allows to easily keep components in sync with shared state by storing pieces of state into observables. The `useObservable()` hook or `withObservables` higher-order component can be used to access these values from a component.
-
-### Obligatory TodoList example
+## Obligatory TodoList example
 
 ```tsx
-type Todo = { text: string; done: boolean };
+import { observable, derived } from "micro-observables";
+import { useObservable } from "micro-observables/react";
+
+type Todo = { id: number; title: string; done: boolean };
 
 class TodoService {
-  private _todos = observable<readonly Todo[]>([]);
+  private nextId = 0;
 
-  readonly todos = this._todos.readOnly();
-  readonly pendingTodos = this._todos.select(todos => todos.filter(it => !it.done));
+  readonly todos = observable<Todo[]>([]);
 
-  addTodo(text: string) {
-    this._todos.update(todos => [...todos, { text, done: false }]);
+  readonly pendingTodos = derived(() =>
+    this.todos.get().filter((it) => !it.done)
+  );
+
+  addTodo(title: string) {
+    this.todos.update((todos) => [
+      ...todos,
+      { id: this.nextId++, title, done: false },
+    ]);
   }
 
-  toggleTodo(index: number) {
-    this._todos.update(todos => todos.map((todo, i) => (i === index ? { ...todo, done: !todo.done } : todo)));
+  toggleTodo(todoId: number) {
+    this.todos.update((todos) =>
+      todos.map((todo) =>
+        todo.id === todoId ? { ...todo, done: !todo.done } : todo
+      )
+    );
+  }
+
+  removeAll() {
+    this.todos.set([]);
   }
 }
 
@@ -73,35 +58,39 @@ const todoService = new TodoService();
 todoService.addTodo("Eat my brocolli");
 todoService.addTodo("Plan trip to Bordeaux");
 
-export const TodoList: React.FC = () => {
+export const TodoList = () => {
   const todos = useObservable(todoService.todos);
   return (
     <div>
       <TodoListHeader />
       <ul>
-        {todos.map((todo, index) => (
-          <TodoItem key={index} todo={todo} index={index} />
+        {todos.map((todo) => (
+          <TodoItem key={todo.id} todo={todo} />
         ))}
       </ul>
-      <AddTodo />
+      <AddTodoForm />
+      <RemoveAllTodosButton />
     </div>
   );
 };
 
-const TodoListHeader: React.FC = () => {
-  const pendingCount = useObservable(todoService.pendingTodos.select(it => it.length));
-  return <h3>{pendingCount} pending todos</h3>;
+const TodoListHeader = () => {
+  const pendingTodos = useObservable(todoService.pendingTodos);
+  return <h3>{pendingTodos.length} pending todos</h3>;
 };
 
-const TodoItem: React.FC<{ todo: Todo; index: number }> = ({ todo, index }) => {
+const TodoItem = ({ todo }: { todo: Todo }) => {
   return (
-    <li style={{ textDecoration: todo.done ? "line-through" : "none" }} onClick={() => todoService.toggleTodo(index)}>
-      {todo.text}
+    <li
+      style={{ textDecoration: todo.done ? "line-through" : "none" }}
+      onClick={() => todoService.toggleTodo(todo.id)}
+    >
+      {todo.title}
     </li>
   );
 };
 
-const AddTodo: React.FC = () => {
+const AddTodoForm = () => {
   const input = useRef<HTMLInputElement>(null);
 
   const addTodo = (event: React.FormEvent) => {
@@ -117,11 +106,19 @@ const AddTodo: React.FC = () => {
     </form>
   );
 };
+
+const RemoveAllTodosButton = () => {
+  return <button onClick={() => todoService.removeAll()}>Remove all</button>;
+};
 ```
 
-This example can be run on [CodeSandbox](https://codesandbox.io/s/hopeful-sea-jrd9e?file=/src/TodoList.tsx).
+This example can be run on [CodeSandbox](https://codesandbox.io/s/micro-observables-example-g9fkfn?file=/src/TodoList.tsx).
 
-### React Batching
+## Recipes
+
+### Creating, reading and updating an observable
+
+## React Batching
 
 Micro-observables supports React batched updates: when modifying an observable, all re-renders caused by the changes from the observable and its derived observables are batched, minimizing the total amount of re-renders.
 
@@ -182,7 +179,7 @@ Convenient method to modify the value contained by the observable, using its cur
 
 ```ts
 const books = observable(["The Jungle Book"]);
-books.update(it => [...it, "Pride and Prejudice"]);
+books.update((it) => [...it, "Pride and Prejudice"]);
 assert.deepEqual(books.get(), ["The Jungle Book", "Pride and Prejudice"]);
 ```
 
@@ -232,7 +229,7 @@ Create a new observable with the result of the given selector applied on the inp
 
 ```ts
 const book = observable({ title: "The Jungle Book", author: "Kipling" });
-const author = book.select(it => it.author);
+const author = book.select((it) => it.author);
 assert.equal(author.get(), "Kipling");
 book.set({ title: "Hamlet", author: "Shakespeare" });
 assert.equal(author.get(), "Shakespeare");
@@ -246,16 +243,16 @@ Create a new observable that is only updated when the value of the input observa
 
 ```ts
 const counter = observable(0);
-const even = counter.onlyIf(it => it % 2 === 0);
-const odd = counter.onlyIf(it => it % 2 === 1);
+const even = counter.onlyIf((it) => it % 2 === 0);
+const odd = counter.onlyIf((it) => it % 2 === 1);
 assert.equal(even.get(), 0);
 assert.equal(odd.get(), undefined);
 
-counter.update(it => it + 1);
+counter.update((it) => it + 1);
 assert.equal(even.get(), 0);
 assert.equal(odd.get(), 1);
 
-counter.update(it => it + 1);
+counter.update((it) => it + 1);
 assert.equal(even.get(), 2);
 assert.equal(odd.get(), 1);
 ```
@@ -266,7 +263,7 @@ Transform the observable into a new observable that contains the value of the in
 
 ```ts
 const userLocation = observable<string | null>(null);
-const lastSeenLocation = userLocation.onlyIf(it => !!it).default("Unknown");
+const lastSeenLocation = userLocation.onlyIf((it) => !!it).default("Unknown");
 assert.equal(lastSeenLocation.get(), "Unknown");
 
 userLocation.set("Paris");
@@ -305,14 +302,23 @@ const bookWithAuthor = Observable.select([author, book], (a, b) => ({
   title: b,
   author: a,
 }));
-assert.deepEqual(bookWithAuthor.get(), { title: "Hamlet", author: "Shakespeare" });
+assert.deepEqual(bookWithAuthor.get(), {
+  title: "Hamlet",
+  author: "Shakespeare",
+});
 
 book.set("Romeo and Juliet");
-assert.deepEqual(bookWithAuthor.get(), { title: "Romeo and Juliet", author: "Shakespeare" });
+assert.deepEqual(bookWithAuthor.get(), {
+  title: "Romeo and Juliet",
+  author: "Shakespeare",
+});
 
 author.set("Kipling");
 book.set("The Jungle Book");
-assert.deepEqual(bookWithAuthor.get(), { title: "The Jungle Book", author: "Kipling" });
+assert.deepEqual(bookWithAuthor.get(), {
+  title: "The Jungle Book",
+  author: "Kipling",
+});
 ```
 
 #### Observable.merge(observables)
@@ -325,8 +331,12 @@ const booksWithId = [
   { id: 2, book: observable("Pride and Prejudice") },
   { id: 3, book: observable("Hamlet") },
 ];
-const books = Observable.merge(booksWithId.map(it => it.book));
-assert.deepEqual(books.get(), ["The Jungle Book", "Pride and Prejudice", "Hamlet"]);
+const books = Observable.merge(booksWithId.map((it) => it.book));
+assert.deepEqual(books.get(), [
+  "The Jungle Book",
+  "Pride and Prejudice",
+  "Hamlet",
+]);
 ```
 
 #### Observable.latest(observable1, observable2, ...)
@@ -366,7 +376,10 @@ const books = observable([
   { title: "Persuasion", authorId: 2 },
 ]);
 const booksWithAuthors = Observable.compute(() =>
-  books.get().map(book => ({ title: book.title, author: authors.get(book.authorId).get() }))
+  books.get().map((book) => ({
+    title: book.title,
+    author: authors.get(book.authorId).get(),
+  }))
 );
 assert.deepEqual(booksWithAuthors.get(), [
   { title: "The Jungle Book", author: "Kipling" },
@@ -397,13 +410,15 @@ Additionally, if React batching is enabled, it batches re-renders together. You 
 
 ```tsx
 const numbers = [...Array(10)].map((_, index) => observable(index));
-const total = Observable.merge(numbers).select(num => num.reduce((a, b) => a + b));
+const total = Observable.merge(numbers).select((num) =>
+  num.reduce((a, b) => a + b)
+);
 expect(total.get()).toStrictEqual(45);
 
 // Listeners of "total" will only be called once, with the final result.
 // Without batching(), it would have been called 10 times
-total.subscribe(val => assert.equal(val, 65));
-Observable.batch(() => numbers.forEach(num => num.update(it => it + 1)));
+total.subscribe((val) => assert.equal(val, 65));
+Observable.batch(() => numbers.forEach((num) => num.update((it) => it + 1)));
 ```
 
 ## React Integration
@@ -445,12 +460,17 @@ class TodoService {
   readonly todos = this._todos.readOnly();
 
   getTodosAssignedTo(assigneeId: string): Observable<Todo[]> {
-    return this._todos.select(todos => todos.filter(it => it.assigneeId === assigneeId));
+    return this._todos.select((todos) =>
+      todos.filter((it) => it.assigneeId === assigneeId)
+    );
   }
 }
 
 const TodoList: React.FC<{ assigneeId: string }> = ({ assigneeId }) => {
-  const todos = useMemoizedObservable(() => todoService.getTodosAssignedTo(assigneeId), [assigneeId]);
+  const todos = useMemoizedObservable(
+    () => todoService.getTodosAssignedTo(assigneeId),
+    [assigneeId]
+  );
   return (
     <div>
       <ul>
