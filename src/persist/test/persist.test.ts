@@ -4,79 +4,73 @@ import { observable } from "../../interface";
 class MemoryStorage {
   items: { [key: string]: string } = {};
 
-  async getItem(key: string): Promise<string | undefined> {
+  getItem(key: string): string | undefined {
     return this.items[key];
   }
 
-  async setItem(key: string, value: string): Promise<void> {
+  setItem(key: string, value: string) {
     this.items[key] = value;
   }
 
-  async removeItem(key: string): Promise<void> {
+  async removeItem(key: string) {
     delete this.items[key];
   }
 }
 
 test("Observables are written to the storage", async () => {
   const storage = new MemoryStorage();
-  const { persist, waitForReady, flush } = createPersist({ storage });
+  const { persist } = createPersist({ storage });
 
   const book = observable("The Jungle Book");
   persist({ book });
-  await waitForReady();
   expect(storage.items).toStrictEqual({});
 
   book.set("Pride and Prejudice");
-  await flush();
   expect(storage.items).toStrictEqual({ book: '"Pride and Prejudice"' });
 });
 
 test("Observables are restored from the storage", async () => {
   const storage = new MemoryStorage();
   storage.items["book"] = '"Pride and Prejudice"';
-  const { persist, waitForReady } = createPersist({ storage });
+  const { persist } = createPersist({ storage });
 
   const book = observable("The Jungle Book");
   persist({ book });
-  await waitForReady();
   expect(book.get()).toStrictEqual("Pride and Prejudice");
 });
 
 test("Migrations are applied before observables are loaded", async () => {
-  const migration1: Migration = async ({ set }) => {
-    await set("book", "Hamlet");
+  const migration1: Migration = ({ set }) => {
+    set("book", "Hamlet");
   };
-  const migration2: Migration = async ({ get, set }) => {
-    await set("book", (await get("book")) + " Remastered");
+  const migration2: Migration = ({ get, set }) => {
+    set("book", get("book") + " Remastered");
   };
-  const migration3: Migration = async ({ get, set }) => {
-    await set("book", (await get("book")).toLowerCase());
+  const migration3: Migration = ({ get, set }) => {
+    set("book", get("book").toLowerCase());
   };
 
   const storage = new MemoryStorage();
   storage.items["book"] = '"The Jungle Book"';
-  storage.items["mo-persist.version"] = "1";
-  const { persist, waitForReady } = createPersist({ storage, migrations: [migration1, migration2, migration3] });
+  storage.items["micro-observables-persist.version"] = "1";
+  const { persist } = createPersist({ storage, migrations: [migration1, migration2, migration3] });
 
   const book = observable("Hamlet");
   persist({ book });
-  await waitForReady();
   expect(book.get()).toStrictEqual("the jungle book remastered");
-  expect(storage.items["mo-persist.version"]).toStrictEqual("3");
+  expect(storage.items["micro-observables-persist.version"]).toStrictEqual("3");
 });
 
 test("Observables are not written to the storage when readOnly", async () => {
   const storage = new MemoryStorage();
   storage.items["book"] = '"The Jungle Book"';
-  const { persist, waitForReady, flush } = createPersist({ storage, readOnly: true });
+  const { persist } = createPersist({ storage, readOnly: true });
 
   const book = observable("Hamlet");
   persist({ book });
-  await waitForReady();
   expect(book.get()).toStrictEqual("The Jungle Book");
 
   book.set("Pride and Prejudice");
-  await flush();
   expect(book.get()).toStrictEqual("Pride and Prejudice");
   expect(storage.items).toStrictEqual({ book: '"The Jungle Book"' });
 });
