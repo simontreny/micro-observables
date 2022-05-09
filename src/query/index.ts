@@ -7,7 +7,8 @@ export interface QueryOptions<
   TData = TQueryFnData,
   TQueryData = TQueryFnData,
   TQueryKey extends QueryKey = QueryKey
-> extends QueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>, Options<TData | undefined> {
+> extends QueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>,
+    Options<TData | undefined> {
   client?: QueryClient;
 }
 
@@ -18,7 +19,7 @@ export class QueryObservable<
   TQueryData = TQueryFnData,
   TQueryKey extends QueryKey = QueryKey
 > extends Observable<TData | undefined> {
-  private _options: QueryOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
+  protected _options: QueryOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
   private _observer: QueryObserver<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
   private _unsubscribe: (() => void) | undefined;
 
@@ -27,7 +28,7 @@ export class QueryObservable<
   constructor(options: QueryOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>) {
     super(options);
     this._options = options;
-    this._observer = new QueryObserver(this.client, this._options);
+    this._observer = new QueryObserver(this.client, options);
   }
 
   get client(): QueryClient {
@@ -40,7 +41,7 @@ export class QueryObservable<
   }
 
   protected onAttach() {
-    this._unsubscribe = this._observer.subscribe(() => Observable.batch(() => this.addToBatch()));
+    this._unsubscribe = this._observer.subscribe(() => this.markAsDirty());
   }
 
   protected onDetach() {

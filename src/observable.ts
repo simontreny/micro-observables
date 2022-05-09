@@ -7,7 +7,7 @@ export type Revision = number;
 
 export const UNSET = Symbol();
 
-let batchedObservables: Observable<any>[] = [];
+let dirtyObservables: Observable<any>[] = [];
 let batchDepth = 0;
 let globalRevision = 0;
 
@@ -17,17 +17,17 @@ export interface Options<T> {
 
 export abstract class Observable<T> {
   protected _val: T | typeof UNSET = UNSET;
-  protected _equalityFn?: EqualityFn<T>;
+  protected _options: Options<T>;
   protected _listeners: Listener<T>[] = [];
   protected _inputs: Observable<any>[] = [];
   protected _outputs: Observable<any>[] = [];
   protected _revision: Revision = -1;
   protected _refreshRevision: Revision = -1;
   protected _attached = false;
-  protected _inBatch = false;
+  protected _dirty = false;
 
   constructor(options: Options<T> = {}) {
-    this._equalityFn = options.equalityFn;
+    this._options = options;
   }
 
   get(): T {
@@ -42,7 +42,6 @@ export abstract class Observable<T> {
     if (this._refreshRevision === globalRevision) {
       return false;
     }
-
     this._refreshRevision = globalRevision;
 
     if (this._val === UNSET) {
@@ -51,10 +50,10 @@ export abstract class Observable<T> {
       return false;
     }
 
-    const couldHaveChanged = !this._attached || this._inBatch;
+    const couldHaveChanged = !this._attached || this._dirty;
     if (couldHaveChanged) {
       const val = this.evaluate();
-      if (this._val !== val && (!this._equalityFn || !this._equalityFn(this._val, val))) {
+      if (this._val !== val && (!this._options.equalityFn || !this._options.equalityFn(this._val, val))) {
         this._val = val;
         this._revision = globalRevision;
         return true;
@@ -70,18 +69,21 @@ export abstract class Observable<T> {
     this._listeners.push(listener);
     this.attachInputs();
 
-    let listenerRemoved = false;
+    let unsubscribed = false;
     return () => {
-      if (!listenerRemoved) {
-        listenerRemoved = true;
+      if (!unsubscribed) {
+        unsubscribed = true;
         this._listeners.splice(this._listeners.indexOf(listener), 1);
-        this.detachInputs();
+        if (!this.isObserved()) {
+          this.detachInputs();
+        }
       }
     };
   }
 
-  get inputs(): Observable<any>[] {
-    return this._inputs;
+  private isObserved(): boolean {
+    // An observable is observed when at least one listener is subscribed to it or to one of its outputs
+    return this._listeners.length > 0 || this._outputs.length > 0;
   }
 
   protected addInput(input: Observable<any>) {
@@ -98,13 +100,8 @@ export abstract class Observable<T> {
     }
   }
 
-  private isObserved(): boolean {
-    // An observable is observed when at least one listener is subscribed to the observable or to one of its outputs
-    return this._listeners.length > 0 || this._outputs.length > 0;
-  }
-
   private attachInputs() {
-    if (!this._attached && this.isObserved()) {
+    if (!this._attached) {
       this._attached = true;
 
       for (const input of this._inputs) {
@@ -121,11 +118,13 @@ export abstract class Observable<T> {
   }
 
   private detachInputs() {
-    if (this._attached && !this.isObserved()) {
+    if (this._attached) {
       this._attached = false;
       for (const input of this._inputs) {
         this.detachInput(input);
-        input.detachInputs();
+        if (!input.isObserved()) {
+          input.detachInputs();
+        }
       }
 
       this.onDetach();
@@ -145,22 +144,24 @@ export abstract class Observable<T> {
     // For example, it can be used to perform network calls or read from local storage or a DB
   }
 
-  protected onDetach() {}
-
-  protected addToBatch() {
-    globalRevision++;
-    this.addToBatchRecursive();
+  protected onDetach() {
+    // Can be overriden to undo operations done in onAttach()
   }
 
-  private addToBatchRecursive() {
-    if (!this._inBatch) {
-      this._inBatch = true;
+  protected markAsDirty() {
+    globalRevision++;
+    Observable.batch(() => this.addToBatch());
+  }
+
+  private addToBatch() {
+    if (!this._dirty) {
+      this._dirty = true;
 
       // Add the observable and its outputs in reverse topological order
       for (const output of this._outputs) {
         output.addToBatch();
       }
-      batchedObservables.push(this);
+      dirtyObservables.push(this);
     }
   }
 
@@ -172,8 +173,8 @@ export abstract class Observable<T> {
       } finally {
         batchDepth--;
         if (batchDepth === 0) {
-          const observables = batchedObservables;
-          batchedObservables = [];
+          const observables = dirtyObservables;
+          dirtyObservables = [];
 
           // Refresh dirty observables and calls listeners when they have changed.
           // We iterate in reverse order as addToBatch() adds them in reverse topological order
@@ -182,7 +183,7 @@ export abstract class Observable<T> {
             const prevVal = observable._val;
             const hasChanged = observable.refresh();
             const val = observable._val;
-            observable._inBatch = false;
+            observable._dirty = false;
 
             if (hasChanged) {
               for (const listener of observable._listeners.slice()) {
@@ -193,6 +194,7 @@ export abstract class Observable<T> {
         }
       }
     };
+
     if (batchDepth === 0 && batchedUpdateFn) {
       batchedUpdateFn(batchedBlock);
     } else {
@@ -211,10 +213,8 @@ export class WritableObservable<T> extends Observable<T> {
   }
 
   set(val: T) {
-    Observable.batch(() => {
-      this._next = val;
-      this.addToBatch();
-    });
+    this._next = val;
+    this.markAsDirty();
   }
 
   update(updater: (val: T) => T) {
@@ -238,7 +238,7 @@ export class WritableObservable<T> extends Observable<T> {
 
 export class DerivedObservable<T> extends Observable<T> {
   private _compute: () => T;
-  private _prevInputs = new Map<DerivedObservable<any>, Revision>();
+  private _prevInputs = new Map<Observable<any>, Revision>();
   private _memoized: T | typeof UNSET = UNSET;
 
   constructor(compute: () => T, options?: Options<T>) {
@@ -251,7 +251,10 @@ export class DerivedObservable<T> extends Observable<T> {
     if (this._memoized === UNSET) {
       inputsHaveChanged = true;
     } else {
-      for (const [input, revision] of this._prevInputs) {
+      for (const [_input, revision] of this._prevInputs) {
+        // Note: we are lying to Typescript here to be able to access protected fields (refresh()
+        // and _revision). See https://github.com/microsoft/TypeScript/issues/10637 for more info
+        const input = _input as DerivedObservable<any>;
         input.refresh();
         if (input._revision !== revision) {
           inputsHaveChanged = true;
@@ -263,15 +266,14 @@ export class DerivedObservable<T> extends Observable<T> {
       return this._memoized as T;
     }
 
-    // Note: we are lying to Typescript here: inputs should actually be a Map<Observable<any>, Revision>
-    // as inputs can be WritableObservables or any other types of observables. But the "protected" access-modifier
-    // behaves differently in Typescript than in other OOP languagues and we wouldn't be able to access refresh()
-    // or _revision otherwise. An alternative could be to declare refresh() as public and to annotate it with an
-    // "internal" comment-hint but I find it less elegant
-    const inputs = new Map<DerivedObservable<any>, Revision>();
+    const inputs = new Map<Observable<any>, Revision>();
     const prevOnGet = Observable.onGet;
     try {
-      Observable.onGet = (input: any) => inputs.set(input, input._revision);
+      Observable.onGet = (_input: Observable<any>) => {
+        // See previous comment on why casting is needed
+        const input = _input as DerivedObservable<any>;
+        inputs.set(input, input._revision);
+      };
       const val = this._compute();
 
       for (const input of inputs.keys()) {

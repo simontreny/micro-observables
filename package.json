@@ -18,7 +18,7 @@
     "build": "rimraf dist && tsc",
     "test": "jest",
     "prepublishOnly": "if [[ ! $PWD =~ dist$ ]]; then echo 'Use `npm run dist` instead' && exit 1; fi",
-    "dist": "npm run build && npm run test && cp package.json README.md dist && cd dist && npm publish"
+    "dist": "npm run build && npm run test && cp package.json README.md LICENSE dist && cd dist && npm publish"
   },
   "repository": {
     "type": "git",

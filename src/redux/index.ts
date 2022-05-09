@@ -23,7 +23,7 @@ export class ReduxObservable<T, TState = any> extends Observable<T> {
   }
 
   protected onAttach() {
-    this._unsubscribe = this._store.subscribe(() => Observable.batch(() => this.addToBatch()));
+    this._unsubscribe = this._store.subscribe(() => this.markAsDirty());
   }
 
   protected onDetach() {
