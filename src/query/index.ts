@@ -19,7 +19,7 @@ export class QueryObservable<
   TQueryData = TQueryFnData,
   TQueryKey extends QueryKey = QueryKey
 > extends Observable<TData | undefined> {
-  protected _options: QueryOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
+  protected override _options: QueryOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
   private _observer: QueryObserver<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
   private _unsubscribe: (() => void) | undefined;
 
@@ -40,11 +40,11 @@ export class QueryObservable<
     return result.data;
   }
 
-  protected onAttach() {
+  protected override onBecomeObserved() {
     this._unsubscribe = this._observer.subscribe(() => this.markAsDirty());
   }
 
-  protected onDetach() {
+  protected override onBecomeUnobserved() {
     this._unsubscribe?.();
     this._unsubscribe = undefined;
   }

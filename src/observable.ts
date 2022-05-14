@@ -23,7 +23,7 @@ export abstract class Observable<T> {
   protected _outputs: Observable<any>[] = [];
   protected _revision: Revision = -1;
   protected _refreshRevision: Revision = -1;
-  protected _attached = false;
+  protected _observed = false;
   protected _dirty = false;
 
   constructor(options: Options<T> = {}) {
@@ -50,7 +50,7 @@ export abstract class Observable<T> {
       return false;
     }
 
-    const couldHaveChanged = !this._attached || this._dirty;
+    const couldHaveChanged = !this._observed || this._dirty;
     if (couldHaveChanged) {
       const val = this.evaluate();
       if (this._val !== val && (!this._options.equalityFn || !this._options.equalityFn(this._val, val))) {
@@ -67,85 +67,77 @@ export abstract class Observable<T> {
 
   subscribe(listener: Listener<T>): Unsubscriber {
     this._listeners.push(listener);
-    this.attachInputs();
+    this.observeInputs();
 
     let unsubscribed = false;
     return () => {
       if (!unsubscribed) {
         unsubscribed = true;
         this._listeners.splice(this._listeners.indexOf(listener), 1);
-        if (!this.isObserved()) {
-          this.detachInputs();
-        }
+        this.unobserveInputs();
       }
     };
   }
 
-  private isObserved(): boolean {
-    // An observable is observed when at least one listener is subscribed to it or to one of its outputs
-    return this._listeners.length > 0 || this._outputs.length > 0;
-  }
-
   protected addInput(input: Observable<any>) {
     this._inputs.push(input);
-    if (this._attached) {
-      this.attachInput(input);
+    if (this._observed) {
+      this.observeInput(input);
     }
   }
 
   protected removeInput(input: Observable<any>) {
     this._inputs.splice(this._inputs.indexOf(input), 1);
-    if (this._attached) {
-      this.detachInput(input);
+    if (this._observed) {
+      this.unobserveInput(input);
     }
   }
 
-  private attachInputs() {
-    if (!this._attached) {
-      this._attached = true;
+  private observeInputs() {
+    if (!this._observed) {
+      this._observed = true;
 
       for (const input of this._inputs) {
-        this.attachInput(input);
-        input.attachInputs();
+        this.observeInput(input);
+        input.observeInputs();
       }
 
-      // Since the observable was not attached to its inputs, its value may be outdated.
-      // Refresh it so that listeners will be called with the correct prevVal the next time an input changes.
+      // Since the observable was not marked as dirty by its inputs, its value may be outdated.
+      // We refresh it so that listeners will be invoked with the correct prevVal the next time it changes.
       this.refresh();
 
-      this.onAttach();
+      this.onBecomeObserved();
     }
   }
 
-  private detachInputs() {
-    if (this._attached) {
-      this._attached = false;
+  private unobserveInputs() {
+    if (this._observed && this._listeners.length === 0 && this._outputs.length === 0) {
+      this._observed = false;
+
       for (const input of this._inputs) {
-        this.detachInput(input);
-        if (!input.isObserved()) {
-          input.detachInputs();
-        }
+        this.unobserveInput(input);
+        input.unobserveInputs();
       }
 
-      this.onDetach();
+      this.onBecomeUnobserved();
     }
   }
 
-  private attachInput(input: Observable<any>) {
+  private observeInput(input: Observable<any>) {
     input._outputs.push(this);
   }
 
-  private detachInput(input: Observable<any>) {
+  private unobserveInput(input: Observable<any>) {
     input._outputs.splice(input._outputs.indexOf(this), 1);
   }
 
-  protected onAttach() {
-    // Can be overriden to run some code when the observable becomes attached (i.e. observed).
-    // For example, it can be used to perform network calls or read from local storage or a DB
+  protected onBecomeObserved() {
+    // Can be overriden to run some code when the observable becomes observed.
+    // It can be used to perform network calls or read from local storage or a DB
   }
 
-  protected onDetach() {
-    // Can be overriden to undo operations done in onAttach()
+  protected onBecomeUnobserved() {
+    // Can be overriden to undo operations performed in onBecomeObserved()
   }
 
   protected markAsDirty() {

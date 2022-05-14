@@ -22,11 +22,11 @@ export class ReduxObservable<T, TState = any> extends Observable<T> {
     return this._select(this._store.getState());
   }
 
-  protected onAttach() {
+  protected override onBecomeObserved() {
     this._unsubscribe = this._store.subscribe(() => this.markAsDirty());
   }
 
-  protected onDetach() {
+  protected override onBecomeUnobserved() {
     this._unsubscribe?.();
     this._unsubscribe = undefined;
   }
