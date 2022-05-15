@@ -4,8 +4,8 @@ export function observable<T>(val: T, options?: Options<T>): WritableObservable<
   return new WritableObservable(val, options);
 }
 
-export function derived<T>(compute: () => T, options?: Options<T>): DerivedObservable<T> {
-  return new DerivedObservable(compute, options);
+export function derived<T>(derive: () => T, options?: Options<T>): DerivedObservable<T> {
+  return new DerivedObservable(derive, options);
 }
 
 export function batch(block: () => void) {

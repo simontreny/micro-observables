@@ -229,13 +229,13 @@ export class WritableObservable<T> extends Observable<T> {
 }
 
 export class DerivedObservable<T> extends Observable<T> {
-  private _compute: () => T;
+  private _derive: () => T;
   private _prevInputs = new Map<Observable<any>, Revision>();
   private _memoized: T | typeof UNSET = UNSET;
 
-  constructor(compute: () => T, options?: Options<T>) {
+  constructor(derive: () => T, options?: Options<T>) {
     super(options);
-    this._compute = compute;
+    this._derive = derive;
   }
 
   protected evaluate(): T {
@@ -266,7 +266,7 @@ export class DerivedObservable<T> extends Observable<T> {
         const input = _input as DerivedObservable<any>;
         inputs.set(input, input._revision);
       };
-      const val = this._compute();
+      const val = this._derive();
 
       for (const input of inputs.keys()) {
         if (!this._prevInputs.has(input)) {

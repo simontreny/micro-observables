@@ -12,12 +12,12 @@ class MemoryStorage {
     this.items[key] = value;
   }
 
-  async removeItem(key: string) {
+  removeItem(key: string) {
     delete this.items[key];
   }
 }
 
-test("Observables are written to the storage", async () => {
+test("Observables are written to the storage", () => {
   const storage = new MemoryStorage();
   const { persist } = createPersist({ storage });
 
@@ -29,7 +29,7 @@ test("Observables are written to the storage", async () => {
   expect(storage.items).toStrictEqual({ book: '"Pride and Prejudice"' });
 });
 
-test("Observables are restored from the storage", async () => {
+test("Observables are restored from the storage", () => {
   const storage = new MemoryStorage();
   storage.items["book"] = '"Pride and Prejudice"';
   const { persist } = createPersist({ storage });
@@ -39,7 +39,7 @@ test("Observables are restored from the storage", async () => {
   expect(book.get()).toStrictEqual("Pride and Prejudice");
 });
 
-test("Migrations are applied before observables are loaded", async () => {
+test("Migrations are applied before observables are loaded", () => {
   const migration1: Migration = ({ set }) => {
     set("book", "Hamlet");
   };
@@ -61,7 +61,7 @@ test("Migrations are applied before observables are loaded", async () => {
   expect(storage.items["micro-observables-persist.version"]).toStrictEqual("3");
 });
 
-test("Observables are not written to the storage when readOnly", async () => {
+test("Observables are not written to the storage when readOnly", () => {
   const storage = new MemoryStorage();
   storage.items["book"] = '"The Jungle Book"';
   const { persist } = createPersist({ storage, readOnly: true });
@@ -73,4 +73,8 @@ test("Observables are not written to the storage when readOnly", async () => {
   book.set("Pride and Prejudice");
   expect(book.get()).toStrictEqual("Pride and Prejudice");
   expect(storage.items).toStrictEqual({ book: '"The Jungle Book"' });
+
+  const book2 = observable("Hamlet");
+  persist({ book: book2 });
+  expect(book2.get()).toStrictEqual("Pride and Prejudice");
 });
