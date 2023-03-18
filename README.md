@@ -13,7 +13,7 @@ _An easy-to-use state management library for React applications, based on observ
 
 ## Introduction
 
-In Micro-observables, observables are objects that holds a value, representing **a piece of state** of your app. Listeners can **subscribe** to observables to get notified the its changes. Observables can also be easily **derived** into new observables in order to build complex applications.
+In Micro-observables, observables are objects that holds a value, representing **a piece of state** of your app. Listeners can **subscribe** to observables to get notified when it changes. Observables can also be easily **derived** into new observables in order to build complex applications.
 
 Micro-observables works great in combination with React with the `useObservable()` hook or the `withObservables()` higher-order component. It allows to keep components in sync with the app's state and can be used as a simple yet powerful alternative to [Redux](https://redux.js.org) or [MobX](https://mobx.js.org).
 
@@ -109,7 +109,20 @@ This example can be run on [CodeSandbox](https://codesandbox.io/s/micro-observab
 
 ## Recipes
 
-### Creating, reading and updating an observable
+### Basic operations
+
+```tsx
+
+
+const user = observable({ name: 20 });
+
+const resize = (newSize: number) => square.set({ size: newSize });
+
+const scale = (factor: number) =>
+  square.update(({ size }) => ({ size: size * factor }));
+
+
+```
 
 ## React Batching
 
@@ -491,11 +504,11 @@ Hooks cannot be used in class components. In this case, you can use the `withObs
 `mapping` can either be a plain mapping object of the form `{ props1: observable1, props2: observable2 }`, or it can be a function taking the `ownProps` of the component and returning a plain mapping object.
 
 ```tsx
-interface Props {
+type Props = {
   assigneeId: string;
 }
 
-interface InjectedProps {
+type InjectedProps = {
   readonly todos: Todo[];
 }
 

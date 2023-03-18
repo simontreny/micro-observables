@@ -1,0 +1,7 @@
+TODO:
+- throttled/debounced
+- Add await until(observable, value => cond), await toPromise(observable), fromPromise?
+- Comparer.identity, shallow, deep
+- AsyncObservables? SWR? Query?
+- inspect(this) / debug(this)
+- mutate() (immer)
